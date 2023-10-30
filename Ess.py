@@ -26,31 +26,41 @@ class Ess:
         self.scheduler = scheduler
 
     def setup(self) -> None:
-        self.scheduler.scheduleEach(self.loop, 1000)
         self.scheduler.scheduleEach(self.mirrorToMqtt, 5000)
         self.scheduler.scheduleEach(self.__keepAlive, 10000)
 
     def readAuthData(self) -> dict:
+
+        responseObj = {}
         try:
             api_url = f'https://{self.ip}/v1/login'
             body = {"password": self.passWd}
 
             response = requests.put(api_url, json=body, headers={'Content-Type': 'application/json'}, verify=False)
-            return response.json()
+            responseObj = response.json()
 
         except Exception as e:
             logger.error("Exception occurs: " + str(e))
 
+        finally:
+            return responseObj
+
     def readData(self, auth: dict, endpoint: str) -> dict:
+
+        responseObj = {}
+
         try:
             api_url = f'https://{self.ip}/v1/{endpoint}'
             body = {"auth_key": auth['auth_key']}
 
             response = requests.post(api_url, json=body, headers={'Content-Type': 'application/json'}, verify=False)
-            return response.json()
+            responseObj = response.json()
 
         except Exception as e:
             logger.error("Exception occurs: " + str(e))
+
+        finally:
+            return responseObj
 
     def mirrorToMqtt(self) -> None:
 
