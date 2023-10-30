@@ -9,6 +9,7 @@ import paho.mqtt.client as pahoMqtt
 from PythonLib.Mqtt import Mqtt
 from PythonLib.Scheduler import Scheduler
 from PythonLib.DictUtil import DictUtil
+from PythonLib.DateUtil import DateTimeUtilities
 
 logger = logging.getLogger('Ess')
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -25,23 +26,31 @@ class Ess:
         self.scheduler = scheduler
 
     def setup(self) -> None:
-        self.scheduler.scheduleEach(self.mqttClient.loop, 500)
         self.scheduler.scheduleEach(self.loop, 1000)
         self.scheduler.scheduleEach(self.mirrorToMqtt, 5000)
+        self.scheduler.scheduleEach(self.__keepAlive, 10000)
 
     def readAuthData(self) -> dict:
-        api_url = f'https://{self.ip}/v1/login'
-        body = {"password": self.passWd}
+        try:
+            api_url = f'https://{self.ip}/v1/login'
+            body = {"password": self.passWd}
 
-        response = requests.put(api_url, json=body, headers={'Content-Type': 'application/json'}, verify=False)
-        return response.json()
+            response = requests.put(api_url, json=body, headers={'Content-Type': 'application/json'}, verify=False)
+            return response.json()
+
+        except Exception as e:
+            logger.error("Exception occurs: " + str(e))
 
     def readData(self, auth: dict, endpoint: str) -> dict:
-        api_url = f'https://{self.ip}/v1/{endpoint}'
-        body = {"auth_key": auth['auth_key']}
+        try:
+            api_url = f'https://{self.ip}/v1/{endpoint}'
+            body = {"auth_key": auth['auth_key']}
 
-        response = requests.post(api_url, json=body, headers={'Content-Type': 'application/json'}, verify=False)
-        return response.json()
+            response = requests.post(api_url, json=body, headers={'Content-Type': 'application/json'}, verify=False)
+            return response.json()
+
+        except Exception as e:
+            logger.error("Exception occurs: " + str(e))
 
     def mirrorToMqtt(self) -> None:
 
@@ -60,13 +69,18 @@ class Ess:
             for value in valuesForSending:
                 self.mqttClient.publishOnChange(value[0], value[1])
 
+    def __keepAlive(self) -> None:
+        self.mqttClient.publishIndependentTopic('/house/agents/Ess2Mqtt/heartbeat', DateTimeUtilities.getCurrentDateString())
+
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
     logging.getLogger('Ess').setLevel(logging.DEBUG)
 
-    mqttClient = Mqtt("koserver.iot", "/house/basement/ess", pahoMqtt.Client("Ess"))
     scheduler = Scheduler()
+
+    mqttClient = Mqtt("koserver.iot", "/house/basement/ess", pahoMqtt.Client("Ess"))
+    scheduler.scheduleEach(mqttClient.loop, 500)
 
     ess = Ess(PASSWD, IP, mqttClient, scheduler)
     ess.setup()
