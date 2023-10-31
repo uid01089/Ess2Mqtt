@@ -26,58 +26,49 @@ class Ess:
         self.scheduler = scheduler
 
     def setup(self) -> None:
+
         self.scheduler.scheduleEach(self.mirrorToMqtt, 5000)
         self.scheduler.scheduleEach(self.__keepAlive, 10000)
 
     def readAuthData(self) -> dict:
 
-        responseObj = {}
-        try:
-            api_url = f'https://{self.ip}/v1/login'
-            body = {"password": self.passWd}
+        api_url = f'https://{self.ip}/v1/login'
+        body = {"password": self.passWd}
 
-            response = requests.put(api_url, json=body, headers={'Content-Type': 'application/json'}, verify=False)
-            responseObj = response.json()
+        response = requests.put(api_url, json=body, headers={'Content-Type': 'application/json'}, verify=False, timeout=10)
+        responseObj = response.json()
 
-        except Exception as e:
-            logger.error("Exception occurs: " + str(e))
+        return responseObj
 
-        finally:
-            return responseObj
-
-    def readData(self, auth: dict, endpoint: str) -> dict:
-
+    def readData(self, endpoint: str) -> dict:
         responseObj = {}
 
         try:
-            api_url = f'https://{self.ip}/v1/{endpoint}'
-            body = {"auth_key": auth['auth_key']}
+            auth = self.readAuthData()
+            if auth['status'] == 'success':
 
-            response = requests.post(api_url, json=body, headers={'Content-Type': 'application/json'}, verify=False)
-            responseObj = response.json()
+                api_url = f'https://{self.ip}/v1/{endpoint}'
+                body = {"auth_key": auth['auth_key']}
 
-        except Exception as e:
-            logger.error("Exception occurs: " + str(e))
+                response = requests.post(api_url, json=body, headers={'Content-Type': 'application/json'}, verify=False, timeout=10)
+                responseObj = response.json()
+        except BaseException:
+            logging.exception('')
 
-        finally:
-            return responseObj
+        return responseObj
 
     def mirrorToMqtt(self) -> None:
 
-        auth = self.readAuthData()
+        valuesForSending = []
 
-        if auth['status'] == 'success':
+        valuesForSending = valuesForSending + DictUtil.flatDict(self.readData('user/essinfo/home'), "essinfo_home")
+        valuesForSending = valuesForSending + DictUtil.flatDict(self.readData('user/setting/systeminfo'), "setting_systeminfo")
+        valuesForSending = valuesForSending + DictUtil.flatDict(self.readData('user/setting/batt'), "setting_batt")
+        valuesForSending = valuesForSending + DictUtil.flatDict(self.readData('user/essinfo/common'), "essinfo_common")
+        valuesForSending = valuesForSending + DictUtil.flatDict(self.readData('user/setting/network'), "setting_network")
 
-            valuesForSending = []
-
-            valuesForSending = valuesForSending + DictUtil.flatDict(self.readData(auth, 'user/essinfo/home'), "essinfo_home")
-            valuesForSending = valuesForSending + DictUtil.flatDict(self.readData(auth, 'user/setting/systeminfo'), "setting_systeminfo")
-            valuesForSending = valuesForSending + DictUtil.flatDict(self.readData(auth, 'user/setting/batt'), "setting_batt")
-            valuesForSending = valuesForSending + DictUtil.flatDict(self.readData(auth, 'user/essinfo/common'), "essinfo_common")
-            valuesForSending = valuesForSending + DictUtil.flatDict(self.readData(auth, 'user/setting/network'), "setting_network")
-
-            for value in valuesForSending:
-                self.mqttClient.publishOnChange(value[0], value[1])
+        for value in valuesForSending:
+            self.mqttClient.publishOnChange(value[0], value[1])
 
     def __keepAlive(self) -> None:
         self.mqttClient.publishIndependentTopic('/house/agents/Ess2Mqtt/heartbeat', DateTimeUtilities.getCurrentDateString())
