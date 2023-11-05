@@ -6,7 +6,7 @@ import os
 
 
 import paho.mqtt.client as pahoMqtt
-from PythonLib.Mqtt import Mqtt
+from PythonLib.Mqtt import MQTTHandler, Mqtt
 from PythonLib.Scheduler import Scheduler
 from PythonLib.DictUtil import DictUtil
 from PythonLib.DateUtil import DateTimeUtilities
@@ -27,7 +27,7 @@ class Ess:
 
     def setup(self) -> None:
 
-        self.scheduler.scheduleEach(self.mirrorToMqtt, 5000)
+        self.scheduler.scheduleEach(self.mirrorToMqtt, 30000)
         self.scheduler.scheduleEach(self.__keepAlive, 10000)
 
     def readAuthData(self) -> dict:
@@ -82,6 +82,8 @@ def main() -> None:
 
     mqttClient = Mqtt("koserver.iot", "/house/basement/ess", pahoMqtt.Client("Ess"))
     scheduler.scheduleEach(mqttClient.loop, 500)
+
+    logging.getLogger('Ess').addHandler(MQTTHandler(mqttClient, '/house/agents/Ess2Mqtt/log'))
 
     ess = Ess(PASSWD, IP, mqttClient, scheduler)
     ess.setup()
