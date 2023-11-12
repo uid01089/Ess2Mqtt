@@ -6,6 +6,7 @@ import os
 
 
 import paho.mqtt.client as pahoMqtt
+from PythonLib.JsonUtil import JsonUtil
 from PythonLib.Mqtt import MQTTHandler, Mqtt
 from PythonLib.Scheduler import Scheduler
 from PythonLib.DictUtil import DictUtil
@@ -18,12 +19,30 @@ IP = "10.10.40.11"
 PASSWD = os.environ.get("PASSWDESS")
 
 
+class Module:
+    def __init__(self) -> None:
+        self.scheduler = Scheduler()
+        self.mqttClient = Mqtt("koserver.iot", "/house/basement/ess", pahoMqtt.Client("Ess"))
+
+    def getScheduler(self) -> Scheduler:
+        return self.scheduler
+
+    def getMqttClient(self) -> Mqtt:
+        return self.mqttClient
+
+    def setup(self) -> None:
+        self.scheduler.scheduleEach(self.mqttClient.loop, 500)
+
+    def loop(self) -> None:
+        self.scheduler.loop()
+
+
 class Ess:
-    def __init__(self, passWd: str, ip: str, mqttClient: Mqtt, scheduler: Scheduler) -> None:
+    def __init__(self, passWd: str, ip: str, module: Module) -> None:
         self.passWd = passWd
         self.ip = ip
-        self.mqttClient = mqttClient
-        self.scheduler = scheduler
+        self.mqttClient = module.getMqttClient()
+        self.scheduler = module.getScheduler()
 
     def setup(self) -> None:
 
@@ -72,24 +91,23 @@ class Ess:
 
     def __keepAlive(self) -> None:
         self.mqttClient.publishIndependentTopic('/house/agents/Ess2Mqtt/heartbeat', DateTimeUtilities.getCurrentDateString())
+        self.mqttClient.publishIndependentTopic('/house/agents/Ess2Mqtt/subscriptions', JsonUtil.obj2Json(self.mqttClient.getSubscriptionCatalog()))
 
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
     logging.getLogger('Ess').setLevel(logging.DEBUG)
 
-    scheduler = Scheduler()
+    module = Module()
 
-    mqttClient = Mqtt("koserver.iot", "/house/basement/ess", pahoMqtt.Client("Ess"))
-    scheduler.scheduleEach(mqttClient.loop, 500)
+    logging.getLogger('Ess').addHandler(MQTTHandler(module.getMqttClient(), '/house/agents/Ess2Mqtt/log'))
 
-    logging.getLogger('Ess').addHandler(MQTTHandler(mqttClient, '/house/agents/Ess2Mqtt/log'))
+    Ess(PASSWD, IP, module).setup()
 
-    ess = Ess(PASSWD, IP, mqttClient, scheduler)
-    ess.setup()
+    print("Ess2Mqtt is running")
 
     while (True):
-        scheduler.loop()
+        module.loop()
         time.sleep(0.25)
 
 
