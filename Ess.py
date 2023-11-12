@@ -99,6 +99,7 @@ def main() -> None:
     logging.getLogger('Ess').setLevel(logging.DEBUG)
 
     module = Module()
+    module.setup()
 
     logging.getLogger('Ess').addHandler(MQTTHandler(module.getMqttClient(), '/house/agents/Ess2Mqtt/log'))
 
