@@ -80,7 +80,9 @@ class Ess:
 
         valuesForSending = []
 
-        valuesForSending = valuesForSending + DictUtil.flatDict(self.readData('user/essinfo/home'), "essinfo_home")
+        essInfoHome = self.readData('user/essinfo/home')
+
+        valuesForSending = valuesForSending + DictUtil.flatDict(self.__correctPowerDirection(essInfoHome), "essinfo_home")
         valuesForSending = valuesForSending + DictUtil.flatDict(self.readData('user/setting/systeminfo'), "setting_systeminfo")
         valuesForSending = valuesForSending + DictUtil.flatDict(self.readData('user/setting/batt'), "setting_batt")
         valuesForSending = valuesForSending + DictUtil.flatDict(self.readData('user/essinfo/common'), "essinfo_common")
@@ -88,6 +90,30 @@ class Ess:
 
         for value in valuesForSending:
             self.mqttClient.publishOnChange(value[0], value[1])
+
+    def __correctPowerDirection(self, essInfoHome: dict) -> dict:
+        is_direct_consuming_ = True if '1' == essInfoHome['direction']['is_direct_consuming_'] else False
+        is_battery_charging_ = True if '1' == essInfoHome['direction']['is_battery_charging_'] else False
+        is_battery_discharging_ = True if '1' == essInfoHome['direction']['is_battery_discharging_'] else False
+        is_grid_selling_ = True if '1' == essInfoHome['direction']['is_grid_selling_'] else False
+        is_grid_buying_ = True if '1' == essInfoHome['direction']['is_grid_buying_'] else False
+        is_charging_from_grid_ = True if '1' == essInfoHome['direction']['is_charging_from_grid_'] else False
+        is_discharging_to_grid_ = True if '1' == essInfoHome['direction']['is_discharging_to_grid_'] else False
+
+        essInfoHome['statistics']['pcs_pv_total_power_org'] = essInfoHome['statistics']['pcs_pv_total_power']
+        essInfoHome['statistics']['batconv_power_org'] = essInfoHome['statistics']['batconv_power']
+        essInfoHome['statistics']['load_power_org'] = essInfoHome['statistics']['load_power']
+        essInfoHome['statistics']['grid_power_org'] = essInfoHome['statistics']['grid_power']
+
+        if is_battery_charging_ or is_charging_from_grid_:
+            essInfoHome['statistics']['batconv_power'] = str(float(essInfoHome['statistics']['batconv_power']) * (-1))
+
+        essInfoHome['statistics']['load_power'] = str(float(essInfoHome['statistics']['load_power']) * (-1))
+
+        if is_grid_selling_:
+            essInfoHome['statistics']['grid_power'] = str(float(essInfoHome['statistics']['grid_power']) * (-1))
+
+        return essInfoHome
 
     def __keepAlive(self) -> None:
         self.mqttClient.publishIndependentTopic('/house/agents/Ess2Mqtt/heartbeat', DateTimeUtilities.getCurrentDateString())
