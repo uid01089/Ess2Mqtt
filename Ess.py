@@ -46,10 +46,13 @@ class Ess:
 
     def setup(self) -> None:
 
-        self.scheduler.scheduleEach(self.mirrorToMqtt, 60000)
+        self.__mirrorToMqtt()
+        self.__keepAlive()
+
+        self.scheduler.scheduleEach(self.__mirrorToMqtt, 60000)
         self.scheduler.scheduleEach(self.__keepAlive, 10000)
 
-    def readAuthData(self) -> dict:
+    def __readAuthData(self) -> dict:
 
         api_url = f'https://{self.ip}/v1/login'
         body = {"password": self.passWd}
@@ -59,11 +62,11 @@ class Ess:
 
         return responseObj
 
-    def readData(self, endpoint: str) -> dict:
+    def __readData(self, endpoint: str) -> dict:
         responseObj = {}
 
         try:
-            auth = self.readAuthData()
+            auth = self.__readAuthData()
             if auth['status'] == 'success':
 
                 api_url = f'https://{self.ip}/v1/{endpoint}'
@@ -76,19 +79,19 @@ class Ess:
 
         return responseObj
 
-    def mirrorToMqtt(self) -> None:
+    def __mirrorToMqtt(self) -> None:
 
         valuesForSending = []
 
-        essInfoHome = self.readData('user/essinfo/home')
-        essInfoHome = self.__correctPowerDirection(essInfoHome)
+        essInfoHome = self.__readData('user/essinfo/home')
+        essInfoHomeCorrected = self.__correctPowerDirection(essInfoHome)
 
-        if essInfoHome:
-            valuesForSending = valuesForSending + DictUtil.flatDict(self.__correctPowerDirection(essInfoHome), "essinfo_home")
-            valuesForSending = valuesForSending + DictUtil.flatDict(self.readData('user/setting/systeminfo'), "setting_systeminfo")
-            valuesForSending = valuesForSending + DictUtil.flatDict(self.readData('user/setting/batt'), "setting_batt")
-            valuesForSending = valuesForSending + DictUtil.flatDict(self.readData('user/essinfo/common'), "essinfo_common")
-            valuesForSending = valuesForSending + DictUtil.flatDict(self.readData('user/setting/network'), "setting_network")
+        if essInfoHomeCorrected:
+            valuesForSending = valuesForSending + DictUtil.flatDict(essInfoHomeCorrected, "essinfo_home")
+            valuesForSending = valuesForSending + DictUtil.flatDict(self.__readData('user/setting/systeminfo'), "setting_systeminfo")
+            valuesForSending = valuesForSending + DictUtil.flatDict(self.__readData('user/setting/batt'), "setting_batt")
+            valuesForSending = valuesForSending + DictUtil.flatDict(self.__readData('user/essinfo/common'), "essinfo_common")
+            valuesForSending = valuesForSending + DictUtil.flatDict(self.__readData('user/setting/network'), "setting_network")
 
             for value in valuesForSending:
                 self.mqttClient.publishOnChange(value[0], value[1])
