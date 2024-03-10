@@ -1,11 +1,12 @@
+import os
+import time
 import logging
 import requests
-import time
 import urllib3
-import os
 
 
 import paho.mqtt.client as pahoMqtt
+
 from PythonLib.JsonUtil import JsonUtil
 from PythonLib.Mqtt import MQTTHandler, Mqtt
 from PythonLib.Scheduler import Scheduler
@@ -46,11 +47,28 @@ class Ess:
 
     def setup(self) -> None:
 
+        self.mqttClient.subscribe('/control/setWinterOnOff', self.__setWinterOnOff)
+
         self.__mirrorToMqtt()
         self.__keepAlive()
 
         self.scheduler.scheduleEach(self.__mirrorToMqtt, 60000)
         self.scheduler.scheduleEach(self.__keepAlive, 10000)
+
+    def __setWinterOnOff(self, payload: str) -> None:
+
+        startDate = '1231'
+        endDate = '1231'
+
+        match(payload):
+            case 'On':
+                startDate = '0101'
+                self._writeData('user/setting/batt', {'startdate': startDate, 'stopDate': endDate})
+            case 'Off':
+                startDate = '1231'
+                self._writeData('user/setting/batt', {'startdate': startDate, 'stopDate': endDate})
+            case _:
+                pass
 
     def __readAuthData(self) -> dict:
 
@@ -73,6 +91,23 @@ class Ess:
                 body = {"auth_key": auth['auth_key']}
 
                 response = requests.post(api_url, json=body, headers={'Content-Type': 'application/json'}, verify=False, timeout=10)
+                responseObj = response.json()
+        except BaseException:
+            logging.exception('')
+
+        return responseObj
+
+    def _writeData(self, endpoint: str, body: object) -> dict:
+        responseObj = {}
+
+        try:
+            auth = self.__readAuthData()
+            if auth['status'] == 'success':
+
+                api_url = f'https://{self.ip}/v1/{endpoint}'
+                body["auth_key"] = auth['auth_key']
+
+                response = requests.put(api_url, json=body, headers={'Content-Type': 'application/json'}, verify=False, timeout=10)
                 responseObj = response.json()
         except BaseException:
             logging.exception('')
