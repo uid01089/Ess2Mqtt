@@ -48,7 +48,7 @@ class Ess:
 
     def setup(self) -> None:
 
-        self.mqttClient.subscribe('/control/setWinter[OnOff]', self.__setWinterOnOff)
+        self.mqttClient.subscribeIndependentTopic('/house/agents/Ess2Mqtt/control/setWinter[On,Off]', self.__setWinterOnOff)
 
         self.__mirrorToMqtt()
         self.__keepAlive()
