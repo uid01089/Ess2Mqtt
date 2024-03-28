@@ -44,10 +44,11 @@ class Ess:
         self.ip = ip
         self.mqttClient = module.getMqttClient()
         self.scheduler = module.getScheduler()
+        self.winterStatus = None
 
     def setup(self) -> None:
 
-        self.mqttClient.subscribe('/control/setWinterOnOff', self.__setWinterOnOff)
+        self.mqttClient.subscribe('/control/setWinter[OnOff]', self.__setWinterOnOff)
 
         self.__mirrorToMqtt()
         self.__keepAlive()
@@ -62,11 +63,15 @@ class Ess:
 
         match(payload):
             case 'On':
-                startDate = '0101'
-                self._writeData('user/setting/batt', {'startdate': startDate, 'stopDate': endDate})
+                if not self.winterStatus:
+                    startDate = '0101'
+                    self._writeData('user/setting/batt', {'startdate': startDate, 'stopDate': endDate})
+                    self.winterStatus = True
             case 'Off':
-                startDate = '1231'
-                self._writeData('user/setting/batt', {'startdate': startDate, 'stopDate': endDate})
+                if self.winterStatus:
+                    startDate = '1231'
+                    self._writeData('user/setting/batt', {'startdate': startDate, 'stopDate': endDate})
+                    self.winterStatus = False
             case _:
                 pass
 
@@ -124,7 +129,11 @@ class Ess:
         if essInfoHomeCorrected:
             valuesForSending = valuesForSending + DictUtil.flatDict(essInfoHomeCorrected, "essinfo_home")
             valuesForSending = valuesForSending + DictUtil.flatDict(self.__readData('user/setting/systeminfo'), "setting_systeminfo")
-            valuesForSending = valuesForSending + DictUtil.flatDict(self.__readData('user/setting/batt'), "setting_batt")
+
+            settings_batt = self.__readData('user/setting/batt')
+            valuesForSending = valuesForSending + DictUtil.flatDict(settings_batt, "setting_batt")
+            self.winterStatus = True if 'on' == settings_batt['winter_status'] else False
+
             valuesForSending = valuesForSending + DictUtil.flatDict(self.__readData('user/essinfo/common'), "essinfo_common")
             valuesForSending = valuesForSending + DictUtil.flatDict(self.__readData('user/setting/network'), "setting_network")
 
@@ -163,6 +172,7 @@ class Ess:
     def __keepAlive(self) -> None:
         self.mqttClient.publishIndependentTopic('/house/agents/Ess2Mqtt/heartbeat', DateTimeUtilities.getCurrentDateString())
         self.mqttClient.publishIndependentTopic('/house/agents/Ess2Mqtt/subscriptions', JsonUtil.obj2Json(self.mqttClient.getSubscriptionCatalog()))
+        self.mqttClient.publishIndependentTopic('/house/agents/Ess2Mqtt/data/winterstatus', str(self.winterStatus))
 
 
 def main() -> None:
