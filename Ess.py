@@ -65,12 +65,12 @@ class Ess:
             case 'On':
                 if not self.winterStatus:
                     startDate = '0101'
-                    self._writeData('user/setting/batt', {'startdate': startDate, 'stopDate': endDate})
+                    self._writeData('user/setting/batt', {'startdate': startDate, 'stopDate': endDate, 'wintermode': 'on'})
                     self.winterStatus = True
             case 'Off':
                 if self.winterStatus:
                     startDate = '1231'
-                    self._writeData('user/setting/batt', {'startdate': startDate, 'stopDate': endDate})
+                    self._writeData('user/setting/batt', {'startdate': startDate, 'stopDate': endDate, 'wintermode': 'off'})
                     self.winterStatus = False
             case _:
                 pass
